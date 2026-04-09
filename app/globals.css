@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&family=Open+Sans:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --solid-blue: #0B2265;
+  --solid-green: #3FAE5A;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Open Sans', sans-serif;
+  background-color: #F4F6F7;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Montserrat', sans-serif;
+}
+
+/* PWA safe areas */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-solid-green text-white font-heading font-700 py-4 px-6 rounded-xl text-lg active:bg-solid-green-hover transition-colors w-full;
+  }
+  .btn-secondary {
+    @apply bg-solid-blue text-white font-heading font-600 py-3 px-5 rounded-xl text-base active:opacity-90 transition-opacity;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-sm p-5;
+  }
+  .input-field {
+    @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-solid-steel focus:outline-none focus:border-solid-blue text-base;
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "Solid Workers",
+  "short_name": "Workers",
+  "description": "Εφαρμογή εργατών Solid Anadomisi",
+  "start_url": "/worker/login",
+  "display": "standalone",
+  "background_color": "#0B2265",
+  "theme_color": "#0B2265",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"]
+}
