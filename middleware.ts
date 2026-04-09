@@ -17,8 +17,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for session cookie
-  const token = request.cookies.get('worker_session')?.value
+  // Check for session cookie (login sets worker_token)
+  const token = request.cookies.get('worker_token')?.value
   if (!token) {
     return NextResponse.redirect(new URL('/worker/login', request.url))
   }
