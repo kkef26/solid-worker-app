@@ -1,7 +1,7 @@
 {
   "name": "Solid Workers",
-  "short_name": "Workers",
-  "description": "Εφαρμογή εργατών Solid Anadomisi",
+  "short_name": "Solid Workers",
+  "description": "Εφαρμογή εργαζομένων Solid Anadomisi",
   "start_url": "/worker/login",
   "display": "standalone",
   "background_color": "#0B2265",
@@ -9,17 +9,14 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
-  ],
-  "categories": ["productivity", "utilities"]
+  ]
 }

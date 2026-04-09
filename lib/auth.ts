@@ -1,31 +1,36 @@
-import { supabase, WorkerAccount } from './supabase'
-import { cookies } from 'next/headers'
+import { supabase } from "./supabase";
+import { NextRequest } from "next/server";
 
-export const SESSION_COOKIE = 'worker_session'
+export async function getWorkerFromToken(req: NextRequest) {
+  const token = req.headers.get("x-worker-token") || req.cookies.get("worker_token")?.value;
+  if (!token) return null;
 
-export async function getSessionWorker(): Promise<WorkerAccount | null> {
-  const cookieStore = cookies()
-  const token = cookieStore.get(SESSION_COOKIE)?.value
-  if (!token) return null
-  return validateToken(token)
+  const { data: session } = await supabase
+    .from("worker_sessions")
+    .select("worker_id, expires_at, worker_accounts(*)")
+    .eq("token", token)
+    .gt("expires_at", new Date().toISOString())
+    .single();
+
+  if (!session) return null;
+  return session;
 }
 
-export async function validateToken(token: string): Promise<WorkerAccount | null> {
-  const { data: session } = await supabase
-    .from('worker_sessions')
-    .select('worker_id, expires_at')
-    .eq('token', token)
-    .single()
+export async function requireAuth(req: NextRequest) {
+  const session = await getWorkerFromToken(req);
+  if (!session) {
+    return { error: "Μη εξουσιοδοτημένη πρόσβαση", status: 401 };
+  }
+  return { session };
+}
 
-  if (!session) return null
-  if (new Date(session.expires_at) < new Date()) return null
+export async function requireManager(req: NextRequest) {
+  const result = await requireAuth(req);
+  if ("error" in result) return result;
 
-  const { data: worker } = await supabase
-    .from('worker_accounts')
-    .select('*')
-    .eq('id', session.worker_id)
-    .eq('is_active', true)
-    .single()
-
-  return worker ?? null
+  const worker = result.session.worker_accounts as Record<string, unknown>;
+  if (!worker?.is_manager) {
+    return { error: "Μόνο για διαχειριστές", status: 403 };
+  }
+  return result;
 }

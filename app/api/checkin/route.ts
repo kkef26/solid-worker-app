@@ -1,64 +1,61 @@
-import { NextResponse } from 'next/server'
-import { validateToken } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
-import { SESSION_COOKIE } from '@/lib/auth'
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
-async function getWorker(request: Request) {
-  const token = request.headers.get('cookie')
-    ?.split(';')
-    .find(c => c.trim().startsWith(SESSION_COOKIE + '='))
-    ?.split('=')[1]
-  if (!token) return null
-  return validateToken(token)
-}
-
-export async function POST(request: Request) {
-  const worker = await getWorker(request)
-  if (!worker) return NextResponse.json({ error: 'Μη εξουσιοδοτημένος' }, { status: 401 })
+export async function POST(req: NextRequest) {
+  const authResult = await requireAuth(req);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
 
   try {
-    const body = await request.json()
-    const { assignment_id, checkin_type, latitude, longitude, accuracy_meters, notes } = body
+    const body = await req.json();
+    const { assignment_id, checkin_type, latitude, longitude, accuracy_meters, notes } = body;
 
     if (!assignment_id || !checkin_type) {
-      return NextResponse.json({ error: 'Λείπουν υποχρεωτικά πεδία' }, { status: 400 })
+      return NextResponse.json({ error: "Απαιτούνται assignment_id και checkin_type" }, { status: 400 });
     }
 
-    const VALID_TYPES = ['start', 'end', 'break_start', 'break_end']
-    if (!VALID_TYPES.includes(checkin_type)) {
-      return NextResponse.json({ error: 'Μη έγκυρος τύπος check-in' }, { status: 400 })
+    const validTypes = ["start", "end", "break_start", "break_end"];
+    if (!validTypes.includes(checkin_type)) {
+      return NextResponse.json({ error: "Μη έγκυρος τύπος παρουσίας" }, { status: 400 });
     }
 
-    // Verify assignment belongs to worker
+    const workerId = authResult.session.worker_id;
+
+    // Verify assignment belongs to this worker
     const { data: assignment } = await supabase
-      .from('worker_assignments')
-      .select('id')
-      .eq('id', assignment_id)
-      .eq('worker_id', worker.id)
-      .single()
+      .from("worker_assignments")
+      .select("id")
+      .eq("id", assignment_id)
+      .eq("worker_id", workerId)
+      .single();
 
     if (!assignment) {
-      return NextResponse.json({ error: 'Η εργασία δεν βρέθηκε' }, { status: 404 })
+      return NextResponse.json({ error: "Η ανάθεση δεν βρέθηκε" }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('worker_checkins')
+    const { data: checkin, error } = await supabase
+      .from("worker_checkins")
       .insert({
         assignment_id,
-        worker_id: worker.id,
+        worker_id: workerId,
         checkin_type,
         latitude: latitude ?? null,
         longitude: longitude ?? null,
         accuracy_meters: accuracy_meters ?? null,
-        notes: notes ?? null,
+        notes: notes || null,
       })
       .select()
-      .single()
+      .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json(data, { status: 201 })
-  } catch (err) {
-    console.error('Checkin error:', err)
-    return NextResponse.json({ error: 'Σφάλμα διακομιστή' }, { status: 500 })
+    if (error) {
+      return NextResponse.json({ error: "Σφάλμα καταγραφής παρουσίας" }, { status: 500 });
+    }
+
+    return NextResponse.json({ checkin }, { status: 201 });
+  } catch (e) {
+    console.error("Checkin error:", e);
+    return NextResponse.json({ error: "Εσωτερικό σφάλμα" }, { status: 500 });
   }
 }

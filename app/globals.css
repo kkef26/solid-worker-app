@@ -1,48 +1,53 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&family=Open+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;900&family=Open+Sans:wght@300;400;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --solid-blue: #0B2265;
-  --solid-green: #3FAE5A;
-}
+@layer base {
+  body {
+    font-family: 'Open Sans', sans-serif;
+    background-color: #F4F6F7;
+    color: #2B2B2B;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-* {
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
-}
-
-html, body {
-  height: 100%;
-  font-family: 'Open Sans', sans-serif;
-  background-color: #F4F6F7;
-}
-
-h1, h2, h3, h4 {
-  font-family: 'Montserrat', sans-serif;
-}
-
-/* PWA safe areas */
-body {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Montserrat', sans-serif;
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-solid-green text-white font-heading font-700 py-4 px-6 rounded-xl text-lg active:bg-solid-green-hover transition-colors w-full;
+    @apply bg-[#3FAE5A] hover:bg-[#2E9449] active:bg-[#2E9449] text-white font-semibold py-4 px-6 rounded-xl transition-colors text-lg w-full;
   }
+
   .btn-secondary {
-    @apply bg-solid-blue text-white font-heading font-600 py-3 px-5 rounded-xl text-base active:opacity-90 transition-opacity;
+    @apply bg-[#0B2265] hover:bg-[#0a1d58] active:bg-[#0a1d58] text-white font-semibold py-4 px-6 rounded-xl transition-colors text-lg w-full;
   }
+
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 active:bg-red-700 text-white font-semibold py-3 px-5 rounded-xl transition-colors;
+  }
+
   .card {
-    @apply bg-white rounded-2xl shadow-sm p-5;
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-4;
   }
-  .input-field {
-    @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-solid-steel focus:outline-none focus:border-solid-blue text-base;
+
+  .pin-button {
+    @apply bg-white border-2 border-gray-200 hover:border-[#0B2265] active:bg-[#0B2265] active:text-white text-[#2B2B2B] font-bold text-2xl h-16 w-full rounded-2xl transition-all select-none;
   }
+
+  .status-pill {
+    @apply text-xs font-semibold px-2 py-1 rounded-full;
+  }
+}
+
+/* Safe area insets for mobile */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Prevent scroll bounce on iOS */
+html, body {
+  overscroll-behavior: none;
 }

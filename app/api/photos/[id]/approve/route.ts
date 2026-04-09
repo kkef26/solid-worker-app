@@ -1,49 +1,41 @@
-import { NextResponse } from 'next/server'
-import { validateToken } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
-import { SESSION_COOKIE } from '@/lib/auth'
+import { NextRequest, NextResponse } from "next/server";
+import { requireManager } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
-async function getManager(request: Request) {
-  const token = request.headers.get('cookie')
-    ?.split(';')
-    .find(c => c.trim().startsWith(SESSION_COOKIE + '='))
-    ?.split('=')[1]
-  if (!token) return null
-  const worker = await validateToken(token)
-  if (!worker?.is_manager) return null
-  return worker
-}
-
-export async function PATCH(
-  request: Request,
+export async function POST(
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const manager = await getManager(request)
-  if (!manager) return NextResponse.json({ error: 'Μη εξουσιοδοτημένος' }, { status: 401 })
+  const authResult = await requireManager(req);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
 
   try {
-    const { status, review_note } = await request.json()
-
-    if (!['approved', 'rejected'].includes(status)) {
-      return NextResponse.json({ error: 'Μη έγκυρη κατάσταση' }, { status: 400 })
-    }
+    const { approved, review_note } = await req.json();
+    const photoId = params.id;
+    const managerId = authResult.session.worker_id;
 
     const { data, error } = await supabase
-      .from('worker_photos')
+      .from("worker_photos")
       .update({
-        status,
-        reviewed_by: manager.id,
-        review_note: review_note ?? null,
+        status: approved ? "approved" : "rejected",
+        reviewed_by: managerId,
+        review_note: review_note || null,
         reviewed_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq("id", photoId)
+      .eq("status", "pending")
       .select()
-      .single()
+      .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json(data)
-  } catch (err) {
-    console.error('Photo approval error:', err)
-    return NextResponse.json({ error: 'Σφάλμα διακομιστή' }, { status: 500 })
+    if (error || !data) {
+      return NextResponse.json({ error: "Η φωτογραφία δεν βρέθηκε ή δεν είναι εκκρεμής" }, { status: 404 });
+    }
+
+    return NextResponse.json({ photo: data });
+  } catch (e) {
+    console.error("Photo approve error:", e);
+    return NextResponse.json({ error: "Εσωτερικό σφάλμα" }, { status: 500 });
   }
 }

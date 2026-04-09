@@ -1,67 +1,114 @@
-import { NextResponse } from 'next/server'
-import { validateToken } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
-import { getPresignedUploadUrl, buildS3Key } from '@/lib/s3'
-import { SESSION_COOKIE } from '@/lib/auth'
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, requireManager } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-async function getWorker(request: Request) {
-  const token = request.headers.get('cookie')
-    ?.split(';')
-    .find(c => c.trim().startsWith(SESSION_COOKIE + '='))
-    ?.split('=')[1]
-  if (!token) return null
-  return validateToken(token)
+const s3 = new S3Client({
+  region: process.env.AWS_REGION || "eu-west-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+
+const BUCKET = process.env.S3_BUCKET || "anadomisi-documents";
+
+// GET /api/photos/upload?pending=true — manager: list pending photos for approval
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const pending = url.searchParams.get("pending");
+
+  if (pending) {
+    const authResult = await requireManager(req);
+    if ("error" in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    const { data: photos } = await supabase
+      .from("worker_photos")
+      .select(`
+        id, s3_key, photo_type, caption, created_at, assignment_id, worker_id,
+        worker_assignments(job_title, job_address),
+        worker_accounts(display_name, full_name)
+      `)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+
+    return NextResponse.json({ photos: photos || [] });
+  }
+
+  return NextResponse.json({ error: "Bad request" }, { status: 400 });
 }
 
-export async function POST(request: Request) {
-  const worker = await getWorker(request)
-  if (!worker) return NextResponse.json({ error: 'Μη εξουσιοδοτημένος' }, { status: 401 })
+// POST /api/photos/upload — worker: get presigned S3 URL
+export async function POST(req: NextRequest) {
+  const authResult = await requireAuth(req);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
 
   try {
-    const { assignment_id, filename, content_type, photo_type, caption } = await request.json()
+    const body = await req.json();
+    const { assignment_id, photo_type, caption, filename, content_type } = body;
 
-    if (!assignment_id || !filename || !content_type || !photo_type) {
-      return NextResponse.json({ error: 'Λείπουν υποχρεωτικά πεδία' }, { status: 400 })
+    if (!assignment_id || !photo_type || !filename || !content_type) {
+      return NextResponse.json({ error: "Λείπουν απαιτούμενα πεδία" }, { status: 400 });
     }
+
+    const validTypes = ["before", "during", "after", "material", "issue"];
+    if (!validTypes.includes(photo_type)) {
+      return NextResponse.json({ error: "Μη έγκυρος τύπος φωτογραφίας" }, { status: 400 });
+    }
+
+    const workerId = authResult.session.worker_id;
 
     // Verify assignment
     const { data: assignment } = await supabase
-      .from('worker_assignments')
-      .select('id')
-      .eq('id', assignment_id)
-      .eq('worker_id', worker.id)
-      .single()
+      .from("worker_assignments")
+      .select("id")
+      .eq("id", assignment_id)
+      .eq("worker_id", workerId)
+      .single();
 
     if (!assignment) {
-      return NextResponse.json({ error: 'Η εργασία δεν βρέθηκε' }, { status: 404 })
+      return NextResponse.json({ error: "Η ανάθεση δεν βρέθηκε" }, { status: 404 });
     }
 
-    const s3Key = buildS3Key(assignment_id, filename)
-    const upload_url = await getPresignedUploadUrl(s3Key, content_type)
+    // Generate S3 key
+    const ext = filename.split(".").pop() || "jpg";
+    const s3_key = `photos/${assignment_id}/${Date.now()}_${workerId.slice(0, 8)}.${ext}`;
 
-    // Create photo record
-    const { data: photo, error } = await supabase
-      .from('worker_photos')
-      .insert({
-        assignment_id,
-        worker_id: worker.id,
-        s3_key: `photos/${s3Key}`,
-        photo_type,
-        caption: caption ?? null,
-        status: 'pending',
-      })
-      .select('id')
-      .single()
+    // Create presigned PUT URL (300s expiry)
+    const command = new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: s3_key,
+      ContentType: content_type,
+    });
+    const upload_url = await getSignedUrl(s3, command, { expiresIn: 300 });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // Pre-create photo record (status will be pending)
+    await supabase.from("worker_photos").insert({
+      assignment_id,
+      worker_id: workerId,
+      s3_key,
+      photo_type,
+      caption: caption || null,
+      status: "pending",
+    });
 
-    return NextResponse.json({
-      upload_url,
-      s3_key: `photos/${s3Key}`,
-      photo_id: photo.id,
-    })
-  } catch (err) {
-    console.error('Photo upload error:', err)
-    return NextResponse.json({ error: 'Σφάλμα διακομιστή' }, { status: 500 })
+    return NextResponse.json({ upload_url, s3_key });
+  } catch (e) {
+    console.error("Photo upload error:", e);
+    return NextResponse.json({ error: "Εσωτερικό σφάλμα" }, { status: 500 });
   }
+}
+
+// PATCH /api/photos/upload — confirm upload completed (no-op, already inserted)
+export async function PATCH(req: NextRequest) {
+  const authResult = await requireAuth(req);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+  return NextResponse.json({ ok: true });
 }

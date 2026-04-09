@@ -1,76 +1,84 @@
-import { NextResponse } from 'next/server'
-import { validateToken } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
-import { SESSION_COOKIE } from '@/lib/auth'
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
-async function getWorker(request: Request) {
-  const token = request.headers.get('cookie')
-    ?.split(';')
-    .find(c => c.trim().startsWith(SESSION_COOKIE + '='))
-    ?.split('=')[1]
-  if (!token) return null
-  return validateToken(token)
-}
-
-export async function GET(request: Request) {
-  const worker = await getWorker(request)
-  if (!worker) return NextResponse.json({ error: 'Μη εξουσιοδοτημένος' }, { status: 401 })
-
-  const { searchParams } = new URL(request.url)
-  const assignmentId = searchParams.get('assignment_id')
-
-  let query = supabase
-    .from('worker_materials')
-    .select('*')
-    .eq('worker_id', worker.id)
-    .order('created_at', { ascending: false })
-
-  if (assignmentId) query = query.eq('assignment_id', assignmentId)
-
-  const { data } = await query
-  return NextResponse.json(data ?? [])
-}
-
-export async function POST(request: Request) {
-  const worker = await getWorker(request)
-  if (!worker) return NextResponse.json({ error: 'Μη εξουσιοδοτημένος' }, { status: 401 })
+export async function POST(req: NextRequest) {
+  const authResult = await requireAuth(req);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
 
   try {
-    const { assignment_id, material_name, quantity, unit, notes } = await request.json()
+    const body = await req.json();
+    const { assignment_id, material_name, quantity, unit, notes } = body;
 
     if (!assignment_id || !material_name || !quantity || !unit) {
-      return NextResponse.json({ error: 'Λείπουν υποχρεωτικά πεδία' }, { status: 400 })
+      return NextResponse.json({ error: "Λείπουν απαιτούμενα πεδία" }, { status: 400 });
     }
 
-    // Verify assignment
+    if (isNaN(Number(quantity)) || Number(quantity) <= 0) {
+      return NextResponse.json({ error: "Μη έγκυρη ποσότητα" }, { status: 400 });
+    }
+
+    const workerId = authResult.session.worker_id;
+
+    // Verify assignment belongs to worker
     const { data: assignment } = await supabase
-      .from('worker_assignments')
-      .select('id')
-      .eq('id', assignment_id)
-      .eq('worker_id', worker.id)
-      .single()
+      .from("worker_assignments")
+      .select("id")
+      .eq("id", assignment_id)
+      .eq("worker_id", workerId)
+      .single();
 
     if (!assignment) {
-      return NextResponse.json({ error: 'Η εργασία δεν βρέθηκε' }, { status: 404 })
+      return NextResponse.json({ error: "Η ανάθεση δεν βρέθηκε" }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('worker_materials')
+    const { data: material, error } = await supabase
+      .from("worker_materials")
       .insert({
         assignment_id,
-        worker_id: worker.id,
+        worker_id: workerId,
         material_name,
-        quantity: parseFloat(quantity),
+        quantity: Number(quantity),
         unit,
-        notes: notes ?? null,
+        notes: notes || null,
       })
       .select()
-      .single()
+      .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json(data, { status: 201 })
-  } catch (err) {
-    console.error('Material error:', err)
-    return NextResponse.json({ error: 'Σφάλμα διακομιστή' }, { status: 500 })
+    if (error) {
+      return NextResponse.json({ error: "Σφάλμα καταχώρησης υλικού" }, { status: 500 });
+    }
+
+    return NextResponse.json({ material }, { status: 201 });
+  } catch (e) {
+    console.error("Materials error:", e);
+    return NextResponse.json({ error: "Εσωτερικό σφάλμα" }, { status: 500 });
   }
+}
+
+export async function GET(req: NextRequest) {
+  const authResult = await requireAuth(req);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  const url = new URL(req.url);
+  const assignmentId = url.searchParams.get("assignment_id");
+  const workerId = authResult.session.worker_id;
+
+  const query = supabase
+    .from("worker_materials")
+    .select("id, material_name, quantity, unit, notes, created_at, assignment_id")
+    .eq("worker_id", workerId)
+    .order("created_at", { ascending: false });
+
+  if (assignmentId) {
+    query.eq("assignment_id", assignmentId);
+  }
+
+  const { data: materials } = await query;
+
+  return NextResponse.json({ materials: materials || [] });
 }
