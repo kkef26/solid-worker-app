@@ -47,12 +47,12 @@ export default function AssignPage() {
 
   const fetchWorkers = async (token: string) => {
     try {
-      const res = await fetch("/api/jobs?workers=true", {
+      const res = await fetch("/api/workers", {
         headers: { "x-worker-token": token },
       });
       if (res.status === 401) { router.push("/worker/login"); return; }
       const data = await res.json();
-      const activeWorkers = (data.workers || []).filter((w: Worker) => !w.is_active || true);
+      const activeWorkers = (data.workers || []).filter((w: Worker) => w.is_active);
       setWorkers(activeWorkers);
       if (activeWorkers.length > 0) {
         setForm((f) => ({ ...f, worker_id: activeWorkers[0].id }));
@@ -107,7 +107,7 @@ export default function AssignPage() {
 
   return (
     <div className="min-h-screen bg-[#F4F6F7]">
-      <div className="bg-[#0B2265] px-5 pt-12 pb-5 safe-top">
+      <div className="bg-[#0B2265] px-5 pt-12 pb-5">
         <button onClick={() => router.back()} className="text-blue-200 text-sm mb-3">← Πίσω</button>
         <h1 className="text-white text-xl font-bold font-heading">Νέα Ανάθεση</h1>
         <p className="text-blue-200 text-sm mt-1">Ανάθεση εργασίας σε εργαζόμενο</p>
@@ -126,7 +126,6 @@ export default function AssignPage() {
         )}
 
         <form onSubmit={handleSubmit} className="card space-y-4">
-          {/* Worker */}
           <div>
             <label className="block text-sm font-semibold text-[#0B2265] mb-1">Εργαζόμενος *</label>
             <select
@@ -141,7 +140,6 @@ export default function AssignPage() {
             </select>
           </div>
 
-          {/* Job title */}
           <div>
             <label className="block text-sm font-semibold text-[#0B2265] mb-1">Τίτλος Έργου *</label>
             <input
@@ -153,7 +151,6 @@ export default function AssignPage() {
             />
           </div>
 
-          {/* Address */}
           <div>
             <label className="block text-sm font-semibold text-[#0B2265] mb-1">Διεύθυνση *</label>
             <input
@@ -165,7 +162,6 @@ export default function AssignPage() {
             />
           </div>
 
-          {/* Description */}
           <div>
             <label className="block text-sm font-semibold text-[#0B2265] mb-1">Περιγραφή</label>
             <textarea
@@ -177,7 +173,6 @@ export default function AssignPage() {
             />
           </div>
 
-          {/* Date + Time */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-semibold text-[#0B2265] mb-1">Ημερομηνία</label>
@@ -199,7 +194,6 @@ export default function AssignPage() {
             </div>
           </div>
 
-          {/* Notes */}
           <div>
             <label className="block text-sm font-semibold text-[#0B2265] mb-1">Σημειώσεις</label>
             <input
