@@ -49,13 +49,14 @@ button {
   outline: none;
 }
 
-input {
+input, select, textarea {
   font-family: inherit;
   outline: none;
 }
 
 /* Utility classes */
 .btn-primary {
+  display: block;
   background: var(--blue);
   color: white;
   padding: 14px 24px;
@@ -63,6 +64,7 @@ input {
   font-size: 16px;
   font-weight: 600;
   width: 100%;
+  text-align: center;
   transition: background 0.2s;
 }
 
@@ -74,6 +76,26 @@ input {
 .btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.btn-secondary {
+  display: block;
+  background: transparent;
+  color: var(--blue);
+  border: 2px solid var(--blue);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-secondary:hover,
+.btn-secondary:active {
+  background: var(--blue);
+  color: white;
 }
 
 .btn-green {
@@ -107,6 +129,14 @@ input {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .tag {
