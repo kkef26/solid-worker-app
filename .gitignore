@@ -4,3 +4,6 @@ node_modules/
 .env.local
 .env*.local
 *.pem
+
+# Local Netlify folder
+.netlify
