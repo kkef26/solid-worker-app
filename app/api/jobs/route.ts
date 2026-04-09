@@ -2,15 +2,72 @@ import { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getWorkerSession, unauthorizedResponse } from '@/lib/auth';
 
-// GET /api/jobs — get today's assignments for the authenticated worker
+// GET /api/jobs
 export async function GET(req: NextRequest) {
   const session = await getWorkerSession(req);
   if (!session) return unauthorizedResponse();
 
   const { searchParams } = new URL(req.url);
+
+  // Manager overview mode
+  if (searchParams.get('overview') === 'true') {
+    if (!session.isManager) {
+      return Response.json({ error: 'Μόνο διαχειριστές' }, { status: 403 });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: workers } = await supabase
+      .from('worker_accounts')
+      .select(`
+        id, display_name, full_name, phone_number,
+        worker_assignments!worker_assignments_worker_id_fkey(id, assigned_date,
+          worker_checkins(id, checkin_type)
+        ),
+        worker_photos!worker_photos_worker_id_fkey(id, status)
+      `)
+      .eq('is_active', true)
+      .order('full_name');
+
+    const processedWorkers = (workers || []).map((w: any) => {
+      const todayAssignments = (w.worker_assignments || []).filter((a: any) => a.assigned_date === today);
+      const checkedIn = todayAssignments.some((a: any) =>
+        (a.worker_checkins || []).some((c: any) => c.checkin_type === 'start')
+      );
+      const pendingPhotos = (w.worker_photos || []).filter((p: any) => p.status === 'pending').length;
+      return {
+        id: w.id,
+        full_name: w.full_name,
+        display_name: w.display_name,
+        phone_number: w.phone_number,
+        is_active: true,
+        today_assignments: todayAssignments.length,
+        checked_in: checkedIn,
+        pending_photos: pendingPhotos,
+      };
+    });
+
+    const { count: pendingPhotosTotal } = await supabase
+      .from('worker_photos')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    const stats = {
+      total_workers: processedWorkers.length,
+      checked_in_today: processedWorkers.filter((w: any) => w.checked_in).length,
+      pending_photos: pendingPhotosTotal || 0,
+      today_assignments: processedWorkers.reduce((sum: number, w: any) => sum + w.today_assignments, 0),
+    };
+
+    return Response.json({
+      workers: processedWorkers,
+      stats,
+      manager_name: session.displayName,
+    });
+  }
+
   const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-  // Managers can see all assignments; workers see only their own
   let query = supabase
     .from('worker_assignments')
     .select(`
@@ -32,7 +89,7 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: 'Σφάλμα φόρτωσης εργασιών' }, { status: 500 });
   }
 
-  return Response.json({ assignments: data });
+  return Response.json({ assignments: data, worker_name: session.displayName });
 }
 
 // POST /api/jobs — manager creates new assignment
