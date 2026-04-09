@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { supabase } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
@@ -10,10 +10,8 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Απαιτείται αριθμός τηλεφώνου και PIN' }, { status: 400 });
     }
 
-    // Normalize phone number
     const normalizedPhone = phone_number.trim();
 
-    // Look up worker account
     const { data: worker, error } = await supabase
       .from('worker_accounts')
       .select('id, pin_hash, display_name, full_name, is_active, is_manager')
@@ -28,13 +26,11 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Ο λογαριασμός είναι ανενεργός' }, { status: 403 });
     }
 
-    // Verify PIN
     const pinMatch = await bcrypt.compare(pin.toString(), worker.pin_hash);
     if (!pinMatch) {
       return Response.json({ error: 'Λανθασμένα στοιχεία' }, { status: 401 });
     }
 
-    // Create session
     const deviceInfo = req.headers.get('user-agent') || 'unknown';
     const { data: session, error: sessionError } = await supabase
       .from('worker_sessions')
@@ -49,7 +45,6 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Σφάλμα δημιουργίας συνεδρίας' }, { status: 500 });
     }
 
-    // Update last login
     await supabase
       .from('worker_accounts')
       .update({ last_login_at: new Date().toISOString() })
@@ -65,7 +60,8 @@ export async function POST(req: NextRequest) {
         is_manager: worker.is_manager,
       },
     });
-  } catch {
+  } catch (err) {
+    console.error('Login error:', err);
     return Response.json({ error: 'Σφάλμα διακομιστή' }, { status: 500 });
   }
 }
