@@ -3,6 +3,29 @@ import { supabase } from '@/lib/supabase';
 import { getWorkerSession, unauthorizedResponse } from '@/lib/auth';
 import { getPresignedUploadUrl, buildS3Key } from '@/lib/s3';
 
+// GET /api/photos/upload?pending=true — manager: list pending photos for review
+export async function GET(req: NextRequest) {
+  const session = await getWorkerSession(req);
+  if (!session) return unauthorizedResponse();
+  if (!session.isManager) return Response.json({ error: 'Μόνο διαχειριστές' }, { status: 403 });
+
+  const { data, error } = await supabase
+    .from('worker_photos')
+    .select(`
+      id, s3_key, photo_type, caption, status, created_at, assignment_id,
+      worker_assignments!worker_photos_assignment_id_fkey(job_title, job_address),
+      worker_accounts!worker_photos_worker_id_fkey(display_name, full_name)
+    `)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    return Response.json({ error: 'Σφάλμα φόρτωσης φωτογραφιών' }, { status: 500 });
+  }
+
+  return Response.json({ photos: data });
+}
+
 // POST /api/photos/upload — get presigned S3 URL + register photo record
 export async function POST(req: NextRequest) {
   const session = await getWorkerSession(req);
@@ -20,10 +43,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Μη έγκυρος τύπος φωτογραφίας' }, { status: 400 });
   }
 
-  // Build S3 key
   const s3Key = buildS3Key(assignment_id, session.workerId, filename);
 
-  // Generate presigned URL (300s expiry)
   let uploadUrl: string;
   try {
     uploadUrl = await getPresignedUploadUrl(s3Key, content_type);
@@ -31,7 +52,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Σφάλμα δημιουργίας URL ανεβάσματος' }, { status: 500 });
   }
 
-  // Register photo in DB (status: pending until approved)
   const { data: photo, error } = await supabase
     .from('worker_photos')
     .insert({
