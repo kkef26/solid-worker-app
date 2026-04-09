@@ -37,8 +37,8 @@ export default function ManagerOverviewPage() {
   useEffect(() => {
     const token = getCookie("worker_token");
     const isManager = getCookie("worker_is_manager");
-    if (!token) { router.push("/worker/login"); return; }
-    if (isManager !== "true") { router.push("/worker/dashboard"); return; }
+    if (!token) { router.push("/login"); return; }
+    if (isManager !== "true") { router.push("/dashboard"); return; }
     fetchOverview(token);
   }, [router]);
 
@@ -47,8 +47,8 @@ export default function ManagerOverviewPage() {
       const res = await fetch("/api/jobs?overview=true", {
         headers: { "x-worker-token": token },
       });
-      if (res.status === 401) { router.push("/worker/login"); return; }
-      if (res.status === 403) { router.push("/worker/dashboard"); return; }
+      if (res.status === 401) { router.push("/login"); return; }
+      if (res.status === 403) { router.push("/dashboard"); return; }
       const data = await res.json();
       setWorkers(data.workers || []);
       setStats(data.stats || null);
@@ -61,7 +61,7 @@ export default function ManagerOverviewPage() {
   const handleLogout = () => {
     document.cookie = "worker_token=; path=/; max-age=0";
     document.cookie = "worker_is_manager=; path=/; max-age=0";
-    router.push("/worker/login");
+    router.push("/login");
   };
 
   if (loading) {
@@ -109,7 +109,7 @@ export default function ManagerOverviewPage() {
         {/* Quick actions */}
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => router.push("/manager/approvals")}
+            onClick={() => router.push("/approvals")}
             className="btn-primary text-sm py-3"
           >
             📸 Εγκρίσεις Φωτ.
@@ -120,7 +120,7 @@ export default function ManagerOverviewPage() {
             ) : null}
           </button>
           <button
-            onClick={() => router.push("/manager/assign")}
+            onClick={() => router.push("/assign")}
             className="btn-secondary text-sm py-3"
           >
             📋 Νέα Ανάθεση

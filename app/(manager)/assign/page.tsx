@@ -40,8 +40,8 @@ export default function AssignPage() {
   useEffect(() => {
     const token = getCookie("worker_token");
     const isManager = getCookie("worker_is_manager");
-    if (!token) { router.push("/worker/login"); return; }
-    if (isManager !== "true") { router.push("/worker/dashboard"); return; }
+    if (!token) { router.push("/login"); return; }
+    if (isManager !== "true") { router.push("/dashboard"); return; }
     fetchWorkers(token);
   }, [router]);
 
@@ -50,7 +50,7 @@ export default function AssignPage() {
       const res = await fetch("/api/jobs?workers=true", {
         headers: { "x-worker-token": token },
       });
-      if (res.status === 401) { router.push("/worker/login"); return; }
+      if (res.status === 401) { router.push("/login"); return; }
       const data = await res.json();
       const activeWorkers = (data.workers || []).filter((w: Worker) => !w.is_active || true);
       setWorkers(activeWorkers);

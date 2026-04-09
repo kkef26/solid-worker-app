@@ -33,14 +33,14 @@ export default function MaterialsPage() {
 
   useEffect(() => {
     const token = getCookie("worker_token");
-    if (!token) { router.push("/worker/login"); return; }
+    if (!token) { router.push("/login"); return; }
     fetchAssignments(token);
   }, [router]);
 
   const fetchAssignments = async (token: string) => {
     try {
       const res = await fetch("/api/jobs", { headers: { "x-worker-token": token } });
-      if (res.status === 401) { router.push("/worker/login"); return; }
+      if (res.status === 401) { router.push("/login"); return; }
       const data = await res.json();
       setAssignments(data.assignments || []);
       if (data.assignments?.length > 0) {

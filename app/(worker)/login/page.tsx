@@ -56,9 +56,9 @@ export default function LoginPage() {
       document.cookie = `worker_token=${data.token}; path=/; max-age=${30 * 24 * 3600}; SameSite=Lax`;
       document.cookie = `worker_is_manager=${data.is_manager}; path=/; max-age=${30 * 24 * 3600}; SameSite=Lax`;
       if (data.is_manager) {
-        router.push("/manager/overview");
+        router.push("/overview");
       } else {
-        router.push("/worker/dashboard");
+        router.push("/dashboard");
       }
     } catch {
       setError("Σφάλμα σύνδεσης. Δοκιμάστε ξανά.");
