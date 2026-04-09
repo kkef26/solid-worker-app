@@ -52,10 +52,10 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      // Store token in cookie via response header (set by server)
+      const isManager = data.worker?.is_manager ?? false;
       document.cookie = `worker_token=${data.token}; path=/; max-age=${30 * 24 * 3600}; SameSite=Lax`;
-      document.cookie = `worker_is_manager=${data.is_manager}; path=/; max-age=${30 * 24 * 3600}; SameSite=Lax`;
-      if (data.is_manager) {
+      document.cookie = `worker_is_manager=${isManager}; path=/; max-age=${30 * 24 * 3600}; SameSite=Lax`;
+      if (isManager) {
         router.push("/manager/overview");
       } else {
         router.push("/worker/dashboard");
@@ -70,7 +70,7 @@ export default function LoginPage() {
   const pinPad = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
 
   return (
-    <div className="min-h-screen bg-[#0B2265] flex flex-col items-center justify-between px-6 py-12 safe-top safe-bottom">
+    <div className="min-h-screen bg-[#0B2265] flex flex-col items-center justify-between px-6 py-12">
       {/* Logo area */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="mb-8 text-center">
