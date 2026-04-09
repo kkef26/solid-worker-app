@@ -9,10 +9,17 @@ export interface WorkerSession {
 }
 
 export async function getWorkerSession(req: NextRequest): Promise<WorkerSession | null> {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  // Support both Authorization: Bearer and x-worker-token headers
+  let token: string | null = null;
 
-  const token = authHeader.slice(7);
+  const authHeader = req.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  } else {
+    token = req.headers.get('x-worker-token');
+  }
+
+  if (!token) return null;
 
   const { data, error } = await supabase
     .from('worker_sessions')
