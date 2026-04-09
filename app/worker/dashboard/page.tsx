@@ -30,7 +30,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const token = getCookie("worker_token");
     if (!token) {
-      router.push("/login");
+      router.push("/worker/login");
       return;
     }
     fetchAssignments(token);
@@ -42,7 +42,7 @@ export default function DashboardPage() {
         headers: { "x-worker-token": token },
       });
       if (res.status === 401) {
-        router.push("/login");
+        router.push("/worker/login");
         return;
       }
       const data = await res.json();
@@ -111,7 +111,7 @@ export default function DashboardPage() {
   const handleLogout = () => {
     document.cookie = "worker_token=; path=/; max-age=0";
     document.cookie = "worker_is_manager=; path=/; max-age=0";
-    router.push("/login");
+    router.push("/worker/login");
   };
 
   const today = new Date().toLocaleDateString("el-GR", {
@@ -201,7 +201,7 @@ export default function DashboardPage() {
                   {checkingIn === a.id ? "..." : "✅ ΠΑΡΟΥΣΙΑΣΗ"}
                 </button>
                 <button
-                  onClick={() => router.push(`/job/${a.id}`)}
+                  onClick={() => router.push(`/worker/job/${a.id}`)}
                   className="flex-1 bg-[#0B2265] hover:bg-[#0a1d58] text-white font-bold py-3 rounded-xl text-sm transition-colors"
                 >
                   📸 Λεπτομέρειες
@@ -214,7 +214,7 @@ export default function DashboardPage() {
         {/* Quick links */}
         <div className="grid grid-cols-2 gap-3 pt-2">
           <button
-            onClick={() => router.push("/materials")}
+            onClick={() => router.push("/worker/materials")}
             className="card flex flex-col items-center py-5 gap-2 hover:shadow-md active:shadow-none transition-shadow"
           >
             <span className="text-2xl">🧱</span>
@@ -223,7 +223,7 @@ export default function DashboardPage() {
           <button
             onClick={() => {
               const isManager = getCookie("worker_is_manager") === "true";
-              if (isManager) router.push("/overview");
+              if (isManager) router.push("/manager/overview");
             }}
             className="card flex flex-col items-center py-5 gap-2 hover:shadow-md active:shadow-none transition-shadow"
             id="manager-link"
