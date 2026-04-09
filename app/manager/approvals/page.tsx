@@ -40,8 +40,8 @@ export default function ApprovalsPage() {
   useEffect(() => {
     const token = getCookie("worker_token");
     const isManager = getCookie("worker_is_manager");
-    if (!token) { router.push("/login"); return; }
-    if (isManager !== "true") { router.push("/dashboard"); return; }
+    if (!token) { router.push("/worker/login"); return; }
+    if (isManager !== "true") { router.push("/worker/dashboard"); return; }
     fetchPending(token);
   }, [router]);
 
@@ -50,7 +50,7 @@ export default function ApprovalsPage() {
       const res = await fetch("/api/photos/upload?pending=true", {
         headers: { "x-worker-token": token },
       });
-      if (res.status === 401) { router.push("/login"); return; }
+      if (res.status === 401) { router.push("/worker/login"); return; }
       const data = await res.json();
       setPhotos(data.photos || []);
     } finally {
