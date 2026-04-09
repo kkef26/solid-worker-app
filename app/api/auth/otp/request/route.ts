@@ -1,48 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { NextRequest } from 'next/server';
 
-// TODO: WhatsApp OTP via Twilio Verify
-// Pattern:
-//   const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-//   await client.verify.v2.services(process.env.TWILIO_VERIFY_SID)
-//     .verifications.create({ to: phone_number, channel: 'whatsapp' });
-// Verify: await client.verify.v2.services(sid).verificationChecks.create({ to, code });
+// TODO: WhatsApp OTP via Twilio Verify — deferred
+// Pattern when ready:
+//   1. POST to https://verify.twilio.com/v2/Services/{SERVICE_SID}/Verifications
+//      Body: To=+306900000001&Channel=whatsapp
+//   2. User receives WhatsApp message with 6-digit code
+//   3. POST to /v2/Services/{SERVICE_SID}/VerificationChecks
+//      Body: To=+306900000001&Code=123456
+//   4. On approved: create session same as PIN login
+// env vars needed: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID
 
 export async function POST(req: NextRequest) {
-  try {
-    const { phone_number } = await req.json();
+  const { phone_number } = await req.json();
 
-    if (!phone_number) {
-      return NextResponse.json({ error: "Απαιτείται αριθμός τηλεφώνου" }, { status: 400 });
-    }
-
-    // Check worker exists
-    const { data: worker } = await supabase
-      .from("worker_accounts")
-      .select("id, is_active")
-      .eq("phone_number", phone_number)
-      .single();
-
-    if (!worker || !worker.is_active) {
-      // Return success anyway (security: don't reveal if number exists)
-      return NextResponse.json({ message: "Αν ο αριθμός είναι εγγεγραμμένος, θα λάβετε OTP" });
-    }
-
-    // Generate 6-digit OTP
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Store OTP
-    await supabase.from("worker_otp_codes").insert({
-      phone_number,
-      code,
-    });
-
-    // TODO: Send via WhatsApp (Twilio Verify) — currently deferred
-    console.log(`[OTP] ${phone_number}: ${code}`);
-
-    return NextResponse.json({ message: "Αν ο αριθμός είναι εγγεγραμμένος, θα λάβετε OTP" });
-  } catch (e) {
-    console.error("OTP error:", e);
-    return NextResponse.json({ error: "Εσωτερικό σφάλμα" }, { status: 500 });
+  if (!phone_number) {
+    return Response.json({ error: 'Απαιτείται αριθμός τηλεφώνου' }, { status: 400 });
   }
+
+  // OTP via WhatsApp not yet implemented
+  return Response.json(
+    { error: 'Η σύνδεση μέσω WhatsApp δεν είναι ακόμα διαθέσιμη. Χρησιμοποιήστε το PIN.' },
+    { status: 501 }
+  );
 }

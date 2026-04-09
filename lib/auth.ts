@@ -1,36 +1,45 @@
-import { supabase } from "./supabase";
-import { NextRequest } from "next/server";
+import { NextRequest } from 'next/server';
+import { supabase } from './supabase';
 
-export async function getWorkerFromToken(req: NextRequest) {
-  const token = req.headers.get("x-worker-token") || req.cookies.get("worker_token")?.value;
-  if (!token) return null;
+export interface WorkerSession {
+  workerId: string;
+  phoneNumber: string;
+  displayName: string;
+  isManager: boolean;
+}
 
-  const { data: session } = await supabase
-    .from("worker_sessions")
-    .select("worker_id, expires_at, worker_accounts(*)")
-    .eq("token", token)
-    .gt("expires_at", new Date().toISOString())
+export async function getWorkerSession(req: NextRequest): Promise<WorkerSession | null> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice(7);
+
+  const { data, error } = await supabase
+    .from('worker_sessions')
+    .select('worker_id, worker_accounts(phone_number, display_name, is_manager, is_active)')
+    .eq('token', token)
+    .gt('expires_at', new Date().toISOString())
     .single();
 
-  if (!session) return null;
-  return session;
+  if (error || !data) return null;
+
+  const account = data.worker_accounts as {
+    phone_number: string;
+    display_name: string;
+    is_manager: boolean;
+    is_active: boolean;
+  } | null;
+
+  if (!account || !account.is_active) return null;
+
+  return {
+    workerId: data.worker_id,
+    phoneNumber: account.phone_number,
+    displayName: account.display_name,
+    isManager: account.is_manager,
+  };
 }
 
-export async function requireAuth(req: NextRequest) {
-  const session = await getWorkerFromToken(req);
-  if (!session) {
-    return { error: "Μη εξουσιοδοτημένη πρόσβαση", status: 401 };
-  }
-  return { session };
-}
-
-export async function requireManager(req: NextRequest) {
-  const result = await requireAuth(req);
-  if ("error" in result) return result;
-
-  const worker = result.session.worker_accounts as unknown as Record<string, unknown>;
-  if (!worker?.is_manager) {
-    return { error: "Μόνο για διαχειριστές", status: 403 };
-  }
-  return result;
+export function unauthorizedResponse(message = 'Μη εξουσιοδοτημένη πρόσβαση') {
+  return Response.json({ error: message }, { status: 401 });
 }

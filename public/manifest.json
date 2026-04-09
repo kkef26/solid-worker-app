@@ -1,10 +1,10 @@
 {
   "name": "Solid Workers",
   "short_name": "Solid Workers",
-  "description": "Εφαρμογή εργαζομένων Solid Anadomisi",
+  "description": "Εφαρμογή εργατών Solid Anadomisi",
   "start_url": "/worker/login",
   "display": "standalone",
-  "background_color": "#0B2265",
+  "background_color": "#ffffff",
   "theme_color": "#0B2265",
   "orientation": "portrait",
   "icons": [

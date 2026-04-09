@@ -1,53 +1,162 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;900&family=Open+Sans:wght@300;400;600&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  body {
-    font-family: 'Open Sans', sans-serif;
-    background-color: #F4F6F7;
-    color: #2B2B2B;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Montserrat', sans-serif;
-  }
+:root {
+  --blue: #0B2265;
+  --blue-light: #1a3a8f;
+  --green: #3FAE5A;
+  --green-hover: #2E9449;
+  --dark: #2B2B2B;
+  --concrete: #F4F6F7;
+  --white: #ffffff;
+  --border: #e2e8f0;
+  --text-muted: #64748b;
+  --danger: #dc2626;
+  --warning: #d97706;
 }
 
-@layer components {
-  .btn-primary {
-    @apply bg-[#3FAE5A] hover:bg-[#2E9449] active:bg-[#2E9449] text-white font-semibold py-4 px-6 rounded-xl transition-colors text-lg w-full;
-  }
-
-  .btn-secondary {
-    @apply bg-[#0B2265] hover:bg-[#0a1d58] active:bg-[#0a1d58] text-white font-semibold py-4 px-6 rounded-xl transition-colors text-lg w-full;
-  }
-
-  .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 active:bg-red-700 text-white font-semibold py-3 px-5 rounded-xl transition-colors;
-  }
-
-  .card {
-    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-4;
-  }
-
-  .pin-button {
-    @apply bg-white border-2 border-gray-200 hover:border-[#0B2265] active:bg-[#0B2265] active:text-white text-[#2B2B2B] font-bold text-2xl h-16 w-full rounded-2xl transition-all select-none;
-  }
-
-  .status-pill {
-    @apply text-xs font-semibold px-2 py-1 rounded-full;
-  }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-/* Safe area insets for mobile */
-.safe-top { padding-top: env(safe-area-inset-top); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+html {
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
 
-/* Prevent scroll bounce on iOS */
-html, body {
-  overscroll-behavior: none;
+body {
+  background: var(--concrete);
+  color: var(--dark);
+  min-height: 100vh;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Montserrat', 'Open Sans', sans-serif;
+  font-weight: 700;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  outline: none;
+}
+
+input {
+  font-family: inherit;
+  outline: none;
+}
+
+/* Utility classes */
+.btn-primary {
+  background: var(--blue);
+  color: white;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover,
+.btn-primary:active {
+  background: var(--blue-light);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-green {
+  background: var(--green);
+  color: white;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.btn-green:hover {
+  background: var(--green-hover);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--blue);
+  border: 2px solid var(--blue);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  width: 100%;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tag-pending { background: #fef3c7; color: #92400e; }
+.tag-approved { background: #d1fae5; color: #065f46; }
+.tag-rejected { background: #fee2e2; color: #991b1b; }
+
+.header {
+  background: var(--blue);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header h1 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.error-msg {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.success-msg {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
 }
