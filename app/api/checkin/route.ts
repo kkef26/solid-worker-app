@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { assignment_id, checkin_type, latitude, longitude, accuracy_meters, notes } = body;
 
-  if (!assignment_id || !checkin_type || latitude == null || longitude == null) {
+  if (!assignment_id || !checkin_type) {
     return Response.json({ error: 'Λείπουν υποχρεωτικά πεδία' }, { status: 400 });
   }
 
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Μη έγκυρος τύπος check-in' }, { status: 400 });
   }
 
-  // Verify the assignment belongs to this worker
+  // Verify the assignment belongs to this worker (managers can check in on any)
   if (!session.isManager) {
     const { data: assignment } = await supabase
       .from('worker_assignments')
@@ -38,10 +38,11 @@ export async function POST(req: NextRequest) {
       assignment_id,
       worker_id: session.workerId,
       checkin_type,
-      latitude,
-      longitude,
-      accuracy_meters,
-      notes,
+      // latitude/longitude can be null if GPS is denied or unavailable
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      accuracy_meters: accuracy_meters ?? null,
+      notes: notes || null,
     })
     .select()
     .single();
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   return Response.json({
     checkin: data,
-    message: `${typeLabels[checkin_type]} καταγράφηκε επιτυχώς`,
+    message: `${typeLabels[checkin_type]} καταγράφηκε επιτυχώς${latitude ? ' (με GPS)' : ' (χωρίς GPS)'}`,
   }, { status: 201 });
 }
 
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('worker_checkins')
-    .select('*')
+    .select('id, checkin_type, latitude, longitude, accuracy_meters, notes, created_at')
     .eq('assignment_id', assignmentId)
     .order('created_at', { ascending: true });
 
