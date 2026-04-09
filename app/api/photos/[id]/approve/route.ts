@@ -9,19 +9,14 @@ export async function POST(
 ) {
   const session = await getWorkerSession(req);
   if (!session) return unauthorizedResponse();
-
   if (!session.isManager) {
-    return Response.json(
-      { error: 'Μόνο διαχειριστές μπορούν να εγκρίνουν φωτογραφίες' },
-      { status: 403 }
-    );
+    return Response.json({ error: 'Μόνο διαχειριστές μπορούν να εγκρίνουν φωτογραφίες' }, { status: 403 });
   }
 
-  const { status, review_note } = await req.json();
+  const body = await req.json();
+  const { approved, review_note } = body;
 
-  if (!['approved', 'rejected'].includes(status)) {
-    return Response.json({ error: 'Μη έγκυρη κατάσταση' }, { status: 400 });
-  }
+  const status = approved ? 'approved' : 'rejected';
 
   const { data, error } = await supabase
     .from('worker_photos')
@@ -41,6 +36,6 @@ export async function POST(
 
   return Response.json({
     photo: data,
-    message: status === 'approved' ? 'Φωτογραφία εγκρίθηκε' : 'Φωτογραφία απορρίφθηκε',
+    message: approved ? 'Φωτογραφία εγκρίθηκε' : 'Φωτογραφία απορρίφθηκε',
   });
 }
