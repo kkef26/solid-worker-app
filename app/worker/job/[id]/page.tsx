@@ -60,7 +60,7 @@ export default function JobDetailPage() {
 
   useEffect(() => {
     const token = getCookie("worker_token");
-    if (!token) { router.push("/login"); return; }
+    if (!token) { router.push("/worker/login"); return; }
     fetchAssignment(token);
   }, [assignmentId, router]);
 
@@ -69,7 +69,7 @@ export default function JobDetailPage() {
       const res = await fetch(`/api/jobs?id=${assignmentId}`, {
         headers: { "x-worker-token": token },
       });
-      if (res.status === 401) { router.push("/login"); return; }
+      if (res.status === 401) { router.push("/worker/login"); return; }
       const data = await res.json();
       setAssignment(data.assignment);
     } catch {
