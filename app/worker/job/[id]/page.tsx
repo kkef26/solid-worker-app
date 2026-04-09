@@ -3,13 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 
-interface Photo {
+interface Assignment {
   id: string;
-  s3_key: string;
-  photo_type: string;
-  caption: string | null;
-  status: string;
-  created_at: string;
+  job_title: string;
+  job_address: string;
+  job_description: string | null;
+  start_time: string | null;
+  notes: string | null;
 }
 
 interface Checkin {
@@ -20,13 +20,12 @@ interface Checkin {
   longitude: number | null;
 }
 
-interface Assignment {
+interface Photo {
   id: string;
-  job_title: string;
-  job_address: string;
-  job_description: string | null;
-  worker_checkins: Checkin[];
-  worker_photos: Photo[];
+  photo_type: string;
+  caption: string | null;
+  status: string;
+  created_at: string;
 }
 
 function getCookie(name: string): string | null {
@@ -35,12 +34,14 @@ function getCookie(name: string): string | null {
   return match ? match[2] : null;
 }
 
+const checkinLabels: Record<string, string> = {
+  start: "Έναρξη", end: "Λήξη",
+  break_start: "Διάλειμμα", break_end: "Επιστροφή",
+};
+
 const photoTypeLabels: Record<string, string> = {
-  before: "Πριν",
-  during: "Κατά τη διάρκεια",
-  after: "Μετά",
-  material: "Υλικό",
-  issue: "Πρόβλημα",
+  before: "Πριν", during: "Κατά τη διάρκεια", after: "Μετά",
+  material: "Υλικό", issue: "Πρόβλημα",
 };
 
 export default function JobDetailPage() {
@@ -50,227 +51,264 @@ export default function JobDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [checkins, setCheckins] = useState<Checkin[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [photoType, setPhotoType] = useState<string>("during");
-  const [caption, setCaption] = useState("");
   const [checkingIn, setCheckingIn] = useState(false);
-  const [checkinType, setCheckinType] = useState<string>("start");
-  const [error, setError] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const [showMaterial, setShowMaterial] = useState(false);
+  const [materialForm, setMaterialForm] = useState({ name: "", quantity: "", unit: "kg" });
+  const [savingMaterial, setSavingMaterial] = useState(false);
+  const [materialSaved, setMaterialSaved] = useState(false);
+
+  const [selectedPhotoType, setSelectedPhotoType] = useState("during");
+  const [photoCaption, setPhotoCaption] = useState("");
+
+  const token = getCookie("worker_token");
 
   useEffect(() => {
-    const token = getCookie("worker_token");
     if (!token) { router.push("/worker/login"); return; }
-    fetchAssignment(token);
-  }, [assignmentId, router]);
+    fetchData();
+  }, [assignmentId]);
 
-  const fetchAssignment = async (token: string) => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(`/api/jobs?id=${assignmentId}`, {
-        headers: { "x-worker-token": token },
-      });
-      if (res.status === 401) { router.push("/worker/login"); return; }
-      const data = await res.json();
-      setAssignment(data.assignment);
-    } catch {
-      setError("Σφάλμα φόρτωσης");
+      const [jobRes, checkinsRes, photosRes] = await Promise.all([
+        fetch(`/api/jobs/${assignmentId}`, { headers: { "x-worker-token": token! } }),
+        fetch(`/api/checkin?assignment_id=${assignmentId}`, { headers: { "x-worker-token": token! } }),
+        fetch(`/api/photos?assignment_id=${assignmentId}`, { headers: { "x-worker-token": token! } }),
+      ]);
+      if (jobRes.ok) setAssignment((await jobRes.json()).assignment);
+      if (checkinsRes.ok) setCheckins((await checkinsRes.json()).checkins || []);
+      if (photosRes.ok) setPhotos((await photosRes.json()).photos || []);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCheckin = async () => {
-    const token = getCookie("worker_token")!;
+  const handleCheckin = async (type: string) => {
     setCheckingIn(true);
-    setError("");
-
     const doCheckin = async (lat: number | null, lng: number | null, acc: number | null) => {
       try {
-        const res = await fetch("/api/checkin", {
+        await fetch("/api/checkin", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-worker-token": token },
+          headers: { "Content-Type": "application/json", "x-worker-token": token! },
           body: JSON.stringify({
             assignment_id: assignmentId,
-            checkin_type: checkinType,
-            latitude: lat, longitude: lng, accuracy_meters: acc,
+            checkin_type: type,
+            latitude: lat,
+            longitude: lng,
+            accuracy_meters: acc,
           }),
         });
-        if (res.ok) await fetchAssignment(token);
-        else setError("Σφάλμα παρουσίασης");
+        await fetchData();
       } finally {
         setCheckingIn(false);
       }
     };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => doCheckin(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
-        () => doCheckin(null, null, null),
-        { timeout: 10000, enableHighAccuracy: true }
-      );
-    } else {
-      doCheckin(null, null, null);
-    }
+    if (!navigator.geolocation) { await doCheckin(null, null, null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => doCheckin(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+      () => doCheckin(null, null, null),
+      { timeout: 10000, enableHighAccuracy: true }
+    );
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const token = getCookie("worker_token")!;
-    setUploading(true);
-    setError("");
-
+    setUploadingPhoto(true);
     try {
-      // Get presigned URL
-      const presignRes = await fetch("/api/photos/upload", {
+      const res = await fetch("/api/photos/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-worker-token": token },
+        headers: { "Content-Type": "application/json", "x-worker-token": token! },
         body: JSON.stringify({
           assignment_id: assignmentId,
-          photo_type: photoType,
-          caption,
+          photo_type: selectedPhotoType,
+          caption: photoCaption || null,
           filename: file.name,
           content_type: file.type,
         }),
       });
-
-      if (!presignRes.ok) {
-        setError("Σφάλμα ανεβάσματος φωτογραφίας");
-        return;
-      }
-
-      const { upload_url, s3_key } = await presignRes.json();
-
-      // Upload directly to S3
+      if (!res.ok) return;
+      const { upload_url } = await res.json();
       await fetch(upload_url, {
         method: "PUT",
         body: file,
         headers: { "Content-Type": file.type },
       });
-
-      // Confirm upload
-      await fetch("/api/photos/upload", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-worker-token": token },
-        body: JSON.stringify({ s3_key, assignment_id: assignmentId }),
-      });
-
-      setCaption("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      await fetchAssignment(token);
-    } catch {
-      setError("Σφάλμα ανεβάσματος");
+      setPhotoCaption("");
+      await fetchData();
     } finally {
-      setUploading(false);
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
+  const handleMaterialSave = async () => {
+    if (!materialForm.name || !materialForm.quantity) return;
+    setSavingMaterial(true);
+    try {
+      await fetch("/api/materials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-worker-token": token! },
+        body: JSON.stringify({
+          assignment_id: assignmentId,
+          material_name: materialForm.name,
+          quantity: parseFloat(materialForm.quantity),
+          unit: materialForm.unit,
+        }),
+      });
+      setMaterialForm({ name: "", quantity: "", unit: "kg" });
+      setShowMaterial(false);
+      setMaterialSaved(true);
+      setTimeout(() => setMaterialSaved(false), 2000);
+    } finally {
+      setSavingMaterial(false);
+    }
+  };
+
+  const lastCheckin = checkins[checkins.length - 1];
+  const isWorking = lastCheckin?.checkin_type === "start" || lastCheckin?.checkin_type === "break_end";
+  const isOnBreak = lastCheckin?.checkin_type === "break_start";
+  const hasStarted = checkins.some(c => c.checkin_type === "start");
+  const hasEnded = checkins.some(c => c.checkin_type === "end");
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0B2265] flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
-          <p>Φόρτωση...</p>
-        </div>
+        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!assignment) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-500">Η ανάθεση δεν βρέθηκε</p>
-          <button onClick={() => router.back()} className="text-[#0B2265] mt-4 underline">Πίσω</button>
-        </div>
+      <div className="min-h-screen bg-[#F4F6F7] flex flex-col items-center justify-center p-8">
+        <p className="text-gray-500 text-center mb-4">Η εργασία δεν βρέθηκε</p>
+        <button onClick={() => router.back()} className="btn-primary max-w-xs">← Πίσω</button>
       </div>
     );
   }
 
-  const latestCheckin = assignment.worker_checkins?.[assignment.worker_checkins.length - 1];
-
   return (
     <div className="min-h-screen bg-[#F4F6F7]">
       {/* Header */}
-      <div className="bg-[#0B2265] px-5 pt-12 pb-5 safe-top">
-        <button onClick={() => router.back()} className="text-blue-200 text-sm mb-3 flex items-center gap-1">
-          ← Πίσω
-        </button>
-        <h1 className="text-white text-xl font-bold font-heading leading-tight">{assignment.job_title}</h1>
-        <p className="text-blue-200 text-sm mt-1 flex items-center gap-1">📍 {assignment.job_address}</p>
+      <div className="bg-[#0B2265] px-5 pt-12 pb-5">
+        <button onClick={() => router.back()} className="text-blue-200 text-sm mb-3">← Πίσω</button>
+        <h1 className="text-white text-xl font-bold font-heading leading-tight">
+          {assignment.job_title}
+        </h1>
+        <p className="text-blue-200 text-sm mt-1">📍 {assignment.job_address}</p>
+        {assignment.start_time && (
+          <span className="inline-block mt-2 text-xs bg-white/10 text-white px-2 py-1 rounded-lg">
+            ⏰ {assignment.start_time.slice(0, 5)}
+          </span>
+        )}
       </div>
 
-      <div className="px-4 py-5 space-y-5">
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-            {error}
-          </div>
-        )}
-
+      <div className="px-4 py-5 space-y-4">
         {/* Description */}
         {assignment.job_description && (
           <div className="card">
+            <p className="text-sm font-semibold text-[#0B2265] mb-1">Περιγραφή</p>
             <p className="text-gray-600 text-sm">{assignment.job_description}</p>
           </div>
         )}
 
-        {/* GPS Check-in */}
-        <div className="card space-y-3">
-          <h3 className="font-bold text-[#0B2265] font-heading">Παρουσίαση GPS</h3>
+        {/* Notes */}
+        {assignment.notes && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <p className="text-amber-700 text-sm">📝 {assignment.notes}</p>
+          </div>
+        )}
 
-          {latestCheckin && (
-            <div className="bg-green-50 text-green-700 px-3 py-2 rounded-lg text-sm">
-              ✅ Τελευταία:{" "}
-              {latestCheckin.checkin_type === "start" ? "Άφιξη" :
-               latestCheckin.checkin_type === "end" ? "Αποχώρηση" :
-               latestCheckin.checkin_type === "break_start" ? "Διάλειμμα" : "Επιστροφή"}{" "}
-              — {new Date(latestCheckin.created_at).toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit" })}
+        {/* Check-in section */}
+        <div className="card">
+          <p className="text-sm font-semibold text-[#0B2265] mb-3">Παρουσία</p>
+
+          {!hasStarted ? (
+            <button
+              onClick={() => handleCheckin("start")}
+              disabled={checkingIn}
+              className="w-full bg-[#3FAE5A] hover:bg-[#2E9449] text-white font-bold py-4 rounded-xl text-base transition-colors disabled:opacity-50"
+            >
+              {checkingIn ? "Καταγραφή..." : "✅ ΕΝΑΡΞΗ ΕΡΓΑΣΙΑΣ"}
+            </button>
+          ) : hasEnded ? (
+            <div className="text-center py-3">
+              <span className="text-3xl">🏁</span>
+              <p className="text-green-600 font-semibold mt-2">Εργασία Ολοκληρώθηκε</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className={`text-center py-2 rounded-xl text-sm font-semibold ${
+                isWorking ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+              }`}>
+                {isWorking ? "🟢 Σε εργασία" : "🟡 Σε διάλειμμα"}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {isWorking && (
+                  <button
+                    onClick={() => handleCheckin("break_start")}
+                    disabled={checkingIn}
+                    className="bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-50"
+                  >
+                    ☕ Διάλειμμα
+                  </button>
+                )}
+                {isOnBreak && (
+                  <button
+                    onClick={() => handleCheckin("break_end")}
+                    disabled={checkingIn}
+                    className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-50"
+                  >
+                    ↩️ Επιστροφή
+                  </button>
+                )}
+                <button
+                  onClick={() => handleCheckin("end")}
+                  disabled={checkingIn || isOnBreak}
+                  className={`bg-[#0B2265] hover:bg-[#0a1d58] text-white font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-50 ${isWorking && !isOnBreak ? "" : "col-span-2"}`}
+                >
+                  🏁 Λήξη Εργασίας
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { value: "start", label: "Άφιξη" },
-              { value: "break_start", label: "Διάλειμμα" },
-              { value: "break_end", label: "Επιστροφή" },
-              { value: "end", label: "Αποχώρηση" },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setCheckinType(opt.value)}
-                className={`py-2 rounded-xl text-sm font-semibold border-2 transition-colors ${
-                  checkinType === opt.value
-                    ? "bg-[#0B2265] border-[#0B2265] text-white"
-                    : "bg-white border-gray-200 text-gray-600"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleCheckin}
-            disabled={checkingIn}
-            className="btn-primary disabled:opacity-50"
-          >
-            {checkingIn ? "Καταγραφή GPS..." : "📍 Καταγραφή Παρουσίας"}
-          </button>
+          {/* Check-in log */}
+          {checkins.length > 0 && (
+            <div className="mt-3 border-t border-gray-100 pt-3 space-y-1">
+              {checkins.map(c => (
+                <div key={c.id} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">{checkinLabels[c.checkin_type] || c.checkin_type}</span>
+                  <span className="text-gray-400">
+                    {new Date(c.created_at).toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit" })}
+                    {c.latitude ? " 📍" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Photo upload */}
+        {/* Photos section */}
         <div className="card space-y-3">
-          <h3 className="font-bold text-[#0B2265] font-heading">Φωτογραφίες</h3>
+          <p className="text-sm font-semibold text-[#0B2265]">Φωτογραφίες ({photos.length})</p>
 
-          <div className="grid grid-cols-3 gap-2">
-            {Object.entries(photoTypeLabels).map(([value, label]) => (
+          {/* Type selector */}
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(photoTypeLabels).map(([key, label]) => (
               <button
-                key={value}
-                onClick={() => setPhotoType(value)}
-                className={`py-2 px-1 rounded-xl text-xs font-semibold border-2 transition-colors ${
-                  photoType === value
-                    ? "bg-[#3FAE5A] border-[#3FAE5A] text-white"
-                    : "bg-white border-gray-200 text-gray-600"
+                key={key}
+                onClick={() => setSelectedPhotoType(key)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+                  selectedPhotoType === key
+                    ? "bg-[#0B2265] text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
                 {label}
@@ -280,10 +318,10 @@ export default function JobDetailPage() {
 
           <input
             type="text"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            placeholder="Σχόλιο (προαιρετικό)"
-            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-[#3FAE5A]"
+            value={photoCaption}
+            onChange={e => setPhotoCaption(e.target.value)}
+            placeholder="Λεζάντα (προαιρετικό)..."
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#3FAE5A]"
           />
 
           <input
@@ -291,56 +329,106 @@ export default function JobDetailPage() {
             type="file"
             accept="image/*"
             capture="environment"
-            onChange={handlePhotoUpload}
             className="hidden"
-            id="photo-upload"
+            onChange={handlePhotoSelect}
           />
-          <label
-            htmlFor="photo-upload"
-            className={`btn-secondary text-center cursor-pointer block ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-          >
-            {uploading ? "Ανέβασμα..." : "📸 Τράβηξε Φωτογραφία"}
-          </label>
 
-          {/* Photo grid */}
-          {assignment.worker_photos && assignment.worker_photos.length > 0 && (
-            <div>
-              <p className="text-xs text-gray-400 mb-2">{assignment.worker_photos.length} φωτογραφίες</p>
-              <div className="grid grid-cols-3 gap-2">
-                {assignment.worker_photos.map((photo) => (
-                  <div key={photo.id} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-xs text-center p-1">
-                      {photoTypeLabels[photo.photo_type]}
-                    </div>
-                    <div className={`absolute top-1 right-1 w-2 h-2 rounded-full ${
-                      photo.status === "approved" ? "bg-green-400" :
-                      photo.status === "rejected" ? "bg-red-400" : "bg-yellow-400"
-                    }`} />
-                  </div>
-                ))}
-              </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingPhoto}
+            className="w-full bg-[#3FAE5A] hover:bg-[#2E9449] text-white font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50"
+          >
+            {uploadingPhoto ? "Αποστολή..." : "📸 Λήψη Φωτογραφίας"}
+          </button>
+
+          {photos.length > 0 && (
+            <div className="border-t border-gray-100 pt-2 space-y-2">
+              {photos.map(p => (
+                <div key={p.id} className="flex items-center gap-2 text-xs">
+                  <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                    p.status === "approved" ? "bg-green-100 text-green-700" :
+                    p.status === "rejected" ? "bg-red-100 text-red-600" :
+                    "bg-amber-100 text-amber-700"
+                  }`}>
+                    {p.status === "approved" ? "✅" : p.status === "rejected" ? "❌" : "⏳"}
+                  </span>
+                  <span className="text-gray-600">{photoTypeLabels[p.photo_type]}</span>
+                  {p.caption && <span className="text-gray-400 truncate flex-1">{p.caption}</span>}
+                  <span className="text-gray-400 ml-auto shrink-0">
+                    {new Date(p.created_at).toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Check-in history */}
-        {assignment.worker_checkins && assignment.worker_checkins.length > 0 && (
-          <div className="card space-y-2">
-            <h3 className="font-bold text-[#0B2265] font-heading text-sm">Ιστορικό παρουσίας</h3>
-            {assignment.worker_checkins.map((c) => (
-              <div key={c.id} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                <span className="text-gray-600">
-                  {c.checkin_type === "start" ? "✅ Άφιξη" :
-                   c.checkin_type === "end" ? "🚪 Αποχώρηση" :
-                   c.checkin_type === "break_start" ? "☕ Διάλειμμα" : "🔄 Επιστροφή"}
-                </span>
-                <span className="text-gray-400">
-                  {new Date(c.created_at).toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              </div>
-            ))}
+        {/* Materials section */}
+        <div className="card space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-[#0B2265]">Υλικά</p>
+            <button
+              onClick={() => setShowMaterial(!showMaterial)}
+              className="text-xs bg-[#0B2265] text-white px-3 py-1.5 rounded-lg font-semibold"
+            >
+              + Καταγραφή
+            </button>
           </div>
-        )}
+
+          {materialSaved && (
+            <div className="bg-green-50 text-green-700 text-sm px-3 py-2 rounded-xl">
+              ✅ Υλικό καταγράφηκε
+            </div>
+          )}
+
+          {showMaterial && (
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              <input
+                type="text"
+                value={materialForm.name}
+                onChange={e => setMaterialForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Όνομα υλικού *"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#3FAE5A]"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  value={materialForm.quantity}
+                  onChange={e => setMaterialForm(f => ({ ...f, quantity: e.target.value }))}
+                  placeholder="Ποσότητα *"
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#3FAE5A]"
+                />
+                <select
+                  value={materialForm.unit}
+                  onChange={e => setMaterialForm(f => ({ ...f, unit: e.target.value }))}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#3FAE5A]"
+                >
+                  <option value="kg">kg</option>
+                  <option value="τεμ.">τεμ.</option>
+                  <option value="m">m</option>
+                  <option value="m²">m²</option>
+                  <option value="λίτρα">λίτρα</option>
+                  <option value="σακιά">σακιά</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setShowMaterial(false)}
+                  className="border border-gray-200 text-gray-600 font-semibold py-3 rounded-xl text-sm"
+                >
+                  Ακύρωση
+                </button>
+                <button
+                  onClick={handleMaterialSave}
+                  disabled={savingMaterial || !materialForm.name || !materialForm.quantity}
+                  className="bg-[#3FAE5A] text-white font-bold py-3 rounded-xl text-sm disabled:opacity-50"
+                >
+                  {savingMaterial ? "..." : "✓ Αποθήκευση"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
