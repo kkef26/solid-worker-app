@@ -28,7 +28,7 @@ export async function requireManager(req: NextRequest) {
   const result = await requireAuth(req);
   if ("error" in result) return result;
 
-  const worker = result.session.worker_accounts as Record<string, unknown>;
+  const worker = result.session.worker_accounts as unknown as Record<string, unknown>;
   if (!worker?.is_manager) {
     return { error: "Μόνο για διαχειριστές", status: 403 };
   }

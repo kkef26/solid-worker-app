@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     // Manager overview
     const today = new Date().toISOString().split("T")[0];
-    const managerWorker = authResult.session.worker_accounts as Record<string, unknown>;
+    const managerWorker = authResult.session.worker_accounts as unknown as Record<string, unknown>;
 
     const { data: workers } = await supabase
       .from("worker_accounts")
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
-  const worker = authResult.session.worker_accounts as Record<string, unknown>;
+  const worker = authResult.session.worker_accounts as unknown as Record<string, unknown>;
   const workerId = authResult.session.worker_id;
 
   if (id) {
