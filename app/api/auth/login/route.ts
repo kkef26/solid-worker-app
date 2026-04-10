@@ -1,67 +1,81 @@
-import { NextRequest } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { supabase } from '@/lib/supabase';
+import { NextResponse, NextRequest } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import bcrypt from 'bcryptjs'
+import { SESSION_COOKIE } from '@/lib/auth'
 
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { phone_number, pin } = await req.json();
+    const { phone_number, pin } = await request.json()
 
     if (!phone_number || !pin) {
-      return Response.json({ error: 'Απαιτείται αριθμός τηλεφώνου και PIN' }, { status: 400 });
+      return NextResponse.json({ error: 'Απαιτείται αριθμός και PIN' }, { status: 400 })
     }
 
-    const normalizedPhone = phone_number.trim();
-
-    const { data: worker, error } = await supabase
+    const { data: worker } = await supabase
       .from('worker_accounts')
-      .select('id, pin_hash, display_name, full_name, is_active, is_manager')
-      .eq('phone_number', normalizedPhone)
-      .single();
+      .select('*')
+      .eq('phone_number', phone_number)
+      .eq('is_active', true)
+      .single()
 
-    if (error || !worker) {
-      return Response.json({ error: 'Λανθασμένα στοιχεία' }, { status: 401 });
+    if (!worker) {
+      return NextResponse.json({ error: 'Λάθος αριθμός ή PIN' }, { status: 401 })
     }
 
-    if (!worker.is_active) {
-      return Response.json({ error: 'Ο λογαριασμός είναι ανενεργός' }, { status: 403 });
+    const valid = await bcrypt.compare(pin, worker.pin_hash)
+    if (!valid) {
+      return NextResponse.json({ error: 'Λάθος αριθμός ή PIN' }, { status: 401 })
     }
 
-    const pinMatch = await bcrypt.compare(pin.toString(), worker.pin_hash);
-    if (!pinMatch) {
-      return Response.json({ error: 'Λανθασμένα στοιχεία' }, { status: 401 });
-    }
-
-    const deviceInfo = req.headers.get('user-agent') || 'unknown';
-    const { data: session, error: sessionError } = await supabase
+    // Create session
+    const { data: session } = await supabase
       .from('worker_sessions')
       .insert({
         worker_id: worker.id,
-        device_info: deviceInfo,
+        device_info: { ua: request.headers.get('user-agent') },
       })
       .select('token, expires_at')
-      .single();
+      .single()
 
-    if (sessionError || !session) {
-      return Response.json({ error: 'Σφάλμα δημιουργίας συνεδρίας' }, { status: 500 });
+    if (!session) {
+      return NextResponse.json({ error: 'Σφάλμα δημιουργίας session' }, { status: 500 })
     }
 
+    // Update last login
     await supabase
       .from('worker_accounts')
       .update({ last_login_at: new Date().toISOString() })
-      .eq('id', worker.id);
+      .eq('id', worker.id)
 
-    return Response.json({
+    const response = NextResponse.json({
       token: session.token,
-      expires_at: session.expires_at,
-      worker: {
-        id: worker.id,
-        display_name: worker.display_name,
-        full_name: worker.full_name,
-        is_manager: worker.is_manager,
-      },
-    });
+      worker_id: worker.id,
+      display_name: worker.display_name,
+      is_manager: worker.is_manager,
+    })
+
+    response.cookies.set(SESSION_COOKIE, session.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      expires: new Date(session.expires_at),
+      path: '/',
+    })
+
+    return response
   } catch (err) {
-    console.error('Login error:', err);
-    return Response.json({ error: 'Σφάλμα διακομιστή' }, { status: 500 });
+    console.error('Login error:', err)
+    return NextResponse.json({ error: 'Σφάλμα διακομιστή' }, { status: 500 })
   }
+}
+
+// Logout
+export async function DELETE(request: NextRequest) {
+  const token = request.cookies.get(SESSION_COOKIE)?.value
+  if (token) {
+    await supabase.from('worker_sessions').delete().eq('token', token)
+  }
+  const res = NextResponse.json({ ok: true })
+  res.cookies.delete(SESSION_COOKIE)
+  return res
 }
