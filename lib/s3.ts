@@ -31,7 +31,7 @@ export async function getPresignedViewUrl(s3Key: string): Promise<string> {
   return getSignedUrl(s3, command, { expiresIn: 3600 })
 }
 
-export function buildS3Key(assignmentId: string, filename: string): string {
+export function buildS3Key(assignmentId: string, workerId: string, filename: string): string {
   const timestamp = Date.now()
-  return `${assignmentId}/${timestamp}-${filename}`
+  return `${assignmentId}/${workerId}/${timestamp}-${filename}`
 }
